@@ -134,7 +134,11 @@ public class EnterpriseSearchUsageTransportAction extends XPackUsageFeatureTrans
             Map<String, Object> usage = new HashMap<>();
             usage.put(EnterpriseSearchFeatureSetUsage.NAME, searchApplication.name());
 
-            addSearchApplicationSchemaStats(searchApplication, usage);
+            try {
+                addSearchApplicationSchemaStats(searchApplication, usage);
+            } catch (ExecutionException | InterruptedException e) {
+                logger.warn("Failed to get search application schema field counts in Enterprise Search usage", e);
+            }
 
             searchApplications.add(usage);
         }
@@ -142,26 +146,23 @@ public class EnterpriseSearchUsageTransportAction extends XPackUsageFeatureTrans
         searchApplicationsUsage.put(EnterpriseSearchFeatureSetUsage.SEARCH_APPLICATIONS, searchApplications);
     }
 
-    private void addSearchApplicationSchemaStats(SearchApplicationListItem searchApplication, Map<String, Object> searchApplicationUsage) {
-        try {
-            FieldCapabilitiesResponse fieldCapsResp = clientWithOrigin.prepareFieldCaps(searchApplication.indices())
-                .setFields("*")
-                .execute()
-                .get();
-            Map<String, Map<String, FieldCapabilities>> fieldCaps = fieldCapsResp.get();
+    private void addSearchApplicationSchemaStats(SearchApplicationListItem searchApplication, Map<String, Object> searchApplicationUsage)
+        throws ExecutionException, InterruptedException {
+        FieldCapabilitiesResponse fieldCapsResp = clientWithOrigin.prepareFieldCaps(searchApplication.indices())
+            .setFields("*")
+            .execute()
+            .get();
+        Map<String, Map<String, FieldCapabilities>> fieldCaps = fieldCapsResp.get();
 
-            int totalSchemaFields = fieldCaps.size();
-            int totalSchemaFieldConflicts = 0;
-            for (Map<String, FieldCapabilities> field : fieldCaps.values()) {
-                if (field.size() > 1) {
-                    totalSchemaFieldConflicts++;
-                }
+        int totalSchemaFields = fieldCaps.size();
+        int totalSchemaFieldConflicts = 0;
+        for (Map<String, FieldCapabilities> field : fieldCaps.values()) {
+            if (field.size() > 1) {
+                totalSchemaFieldConflicts++;
             }
-
-            searchApplicationUsage.put(EnterpriseSearchFeatureSetUsage.SCHEMA_FIELD_COUNT, totalSchemaFields);
-            searchApplicationUsage.put(EnterpriseSearchFeatureSetUsage.SCHEMA_FIELD_CONFLICT_COUNT, totalSchemaFieldConflicts);
-        } catch (ExecutionException | InterruptedException e) {
-            logger.warn("Failed to get search application schema field counts in Enterprise Search usage", e);
         }
+
+        searchApplicationUsage.put(EnterpriseSearchFeatureSetUsage.SCHEMA_FIELD_COUNT, totalSchemaFields);
+        searchApplicationUsage.put(EnterpriseSearchFeatureSetUsage.SCHEMA_FIELD_CONFLICT_COUNT, totalSchemaFieldConflicts);
     }
 }
